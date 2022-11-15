@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
 type ResponseApi = {
+	ok: boolean;
 	message: string;
 };
 
@@ -12,6 +13,6 @@ const handler = async (
 		query: { message = 'ocurrio un error', status = 400 },
 	} = req;
 
-	res.status(Number(status)).json({ message: message.toString() });
+	res.status(Number(status)).json({ ok: false, message: message.toString() });
 };
 export default handler;

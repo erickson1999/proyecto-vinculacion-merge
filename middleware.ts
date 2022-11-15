@@ -1,16 +1,19 @@
 // middleware.ts
 import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
+import errors from './utils/ErrorsMiddlware';
 import { jwtVerify } from 'jose';
-import { ModelRol } from './models';
 // This function can be marked `async` if using `await` inside
 export async function middleware(request: NextRequest) {
+	const { method } = request;
+
 	type PayloadT = {
 		id: string;
 		iat: number;
 		exp: number;
 		nbf: number;
 	};
+
 	async function verify(token: string, secret: string): Promise<PayloadT> {
 		const { payload } = await jwtVerify(
 			token,
@@ -19,52 +22,46 @@ export async function middleware(request: NextRequest) {
 		console.log({ payloadVerify: payload });
 		return payload as PayloadT;
 	}
+	function startsWith(url: string) {
+		return request.nextUrl.pathname.startsWith(url);
+	}
 	function error(message: string, status: string | number) {
 		const url = request.nextUrl.clone();
 		url.pathname = '/api/v1/error';
 		url.search = `?message=${message}&status=${status.toString()}`;
 		return url;
 	}
-
-	const errors = {
-		noToken: {
-			message: 'No se envió un token',
-			status: 400,
-		},
-		invalidToken: {
-			message: 'token inválido',
-			status: 400,
-		},
-		noMethod: {
-			message: 'no se envió un método',
-			status: 400,
-		},
-		forbidden: {
-			message: 'no estás autorizado',
-			status: 403,
-		},
-	};
-	const { method } = request;
-	if (!method) {
-		const url = request.nextUrl.clone();
-		url.pathname = '/api/v1/error';
-		url.search = `?message=${errors.noMethod.message}&status=${errors.noMethod.status}`;
+	function validRol(userRol: string, validRol: string) {
+		if (validRol === userRol) {
+			return NextResponse.next();
+		}
+		const url = error(errors.forbidden.message, errors.forbidden.status);
 		return NextResponse.rewrite(url);
 	}
 
-	if (request.nextUrl.pathname.startsWith('/api/v1/auth/login')) {
+	if (!method) {
+		const url = error(errors.noMethod.message, errors.noMethod.status);
+		return NextResponse.rewrite(url);
+	}
+	if (startsWith('/api/v1/auth/login')) {
 		return NextResponse.next();
 	}
-	if (request.nextUrl.pathname.startsWith('/api/v1/auth/register')) {
+	if (startsWith('/api/v1/auth/register')) {
 		return NextResponse.next();
 	}
-
+	console.log("flag1")
 	// validations anythings  enviroment variables
 	try {
 		const TOKEN_SECRET = process.env.TOKEN_SECRET;
+		const BASE_URL_API = process.env.BASE_URL_API;
+
 		if (!TOKEN_SECRET) {
 			throw new Error('No existe la variale TOKEN_SECRET en el archivo.env');
 		}
+		if (!BASE_URL_API) {
+			throw new Error('No existe la variale BASE_URL_API en el archivo.env');
+		}
+
 		const token = request.cookies.get('x-access-token');
 		if (!token) {
 			const url = error(errors.noToken.message, errors.noToken.status);
@@ -72,43 +69,40 @@ export async function middleware(request: NextRequest) {
 		}
 		const payload = await verify(token, process.env.TOKEN_SECRET!);
 		//consult role
-		const rol = await fetch('http://localhost:3000/api/v1/getRol', {
+
+		const rol = await fetch(BASE_URL_API + '/api/v1/getRol', {
 			method: 'POST',
 			headers: {
 				id: payload.id,
 			},
 		});
 		const rolJSON = await rol.json();
+
+
 		if (rolJSON.ok === false) {
-			throw new Error();
+			throw new Error(rolJSON.message);
 		}
-		if (request.nextUrl.pathname.startsWith('/api/v1/attendances')) {
+		if (startsWith('/api/v1/attendances')) {
+			console.log("flag")
 			switch (method) {
 				case 'GET': {
-					if (rolJSON.message === 'docente') {
-						return NextResponse.next();
-					} else {
-						const url = error(
-							errors.forbidden.message,
-							errors.forbidden.status
-						);
-						return NextResponse.rewrite(url);
-					}
+					validRol(rolJSON.rol, 'docente');
 				}
 				default: {
 					return NextResponse.next();
 				}
 			}
 		}
-	} catch (error) {
-		console.error(error);
+	} catch (error: any) {
+		console.error(error)
 		const url = request.nextUrl.clone();
 		url.pathname = '/api/v1/error';
+		console.log({errormessage:error.message})
 		url.search = `?message=${errors.forbidden.message}&${errors.forbidden.status}`;
 		return NextResponse.rewrite(url);
 	}
 }
 
 export const config = {
-	matcher: ['/api/v1/:path*', '/:path*'],
+	matcher: ['/api/v1/:path*'],
 };

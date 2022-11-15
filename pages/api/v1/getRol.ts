@@ -22,11 +22,9 @@ const handler = async (
 		if (!id) {
 			return res.status(400).json({ ok: false, message: 'no se envió un id' });
 		}
-
 		const personRol = await ModelPersona_rol.findOne({
 			where: { id_persona: Number(id) },
 		});
-
 		if (!personRol) {
 			return res
 				.status(404)
@@ -38,9 +36,7 @@ const handler = async (
 				.status(403)
 				.json({ ok: false, message: 'el rol de la persona está inactivo' });
 		}
-
 		const rol = await ModelRol.findByPk(personRolJSON.id_rol);
-		console.log('🚀 ~ file: getRol.ts ~ line 38 ~ rol', rol);
 		if (!rol) {
 			return res.status(404).json({ ok: false, message: 'el rol no existe' });
 		}
